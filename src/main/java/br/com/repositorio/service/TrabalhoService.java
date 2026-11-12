@@ -7,22 +7,30 @@ import br.com.repositorio.dto.TrabalhoResponse;
 import br.com.repositorio.exception.ArmazenamentoException;
 import br.com.repositorio.exception.RecursoNaoEncontradoException;
 import br.com.repositorio.exception.RegraNegocioException;
-import br.com.repositorio.model.entity.*;
+import br.com.repositorio.model.entity.ArquivoInfo;
+import br.com.repositorio.model.entity.Curso;
+import br.com.repositorio.model.entity.DownloadLog;
+import br.com.repositorio.model.entity.Orientador;
+import br.com.repositorio.model.entity.Trabalho;
+import br.com.repositorio.model.entity.Usuario;
 import br.com.repositorio.model.enums.StatusTrabalho;
-import br.com.repositorio.repository.*;
+import br.com.repositorio.repository.CursoRepository;
+import br.com.repositorio.repository.DownloadLogRepository;
+import br.com.repositorio.repository.OrientadorRepository;
+import br.com.repositorio.repository.TrabalhoRepository;
 import br.com.repositorio.repository.spec.TrabalhoSpecs;
 import br.com.repositorio.storage.StorageService;
-import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.core.io.Resource;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionSynchronization;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
-import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -33,16 +41,14 @@ import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.Arrays;
 import java.util.HexFormat;
-import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Objects;
 import java.util.UUID;
 
-@Slf4j
 @Service
-@RequiredArgsConstructor
 public class TrabalhoService {
 
+    private static final Logger log = LoggerFactory.getLogger(TrabalhoService.class);
     private static final byte[] ASSINATURA_PDF = "%PDF-".getBytes(StandardCharsets.US_ASCII);
 
     private final TrabalhoRepository trabalhoRepository;
@@ -51,9 +57,19 @@ public class TrabalhoService {
     private final DownloadLogRepository downloadLogRepository;
     private final StorageService storage;
 
-    // ------------------------------------------------------------------
-    // Upload
-    // ------------------------------------------------------------------
+    public TrabalhoService(
+            TrabalhoRepository trabalhoRepository,
+            CursoRepository cursoRepository,
+            OrientadorRepository orientadorRepository,
+            DownloadLogRepository downloadLogRepository,
+            StorageService storage
+    ) {
+        this.trabalhoRepository = trabalhoRepository;
+        this.cursoRepository = cursoRepository;
+        this.orientadorRepository = orientadorRepository;
+        this.downloadLogRepository = downloadLogRepository;
+        this.storage = storage;
+    }
 
     @Transactional
     public TrabalhoResponse enviar(TrabalhoRequest dados, MultipartFile arquivo, Usuario usuario) {
@@ -69,19 +85,23 @@ public class TrabalhoService {
 
         String chave = gerarChave(dados.ano(), curso.getId());
         storage.salvar(chave, arquivo);
-        limparArquivoQuando(chave, false); // se a transação der rollback, apaga o PDF órfão
+        limparArquivoQuando(chave, false);
 
         Trabalho t = new Trabalho();
         preencher(t, dados, curso, orientador);
         t.setArquivo(new ArquivoInfo(
-                nomeSeguro(arquivo.getOriginalFilename()), chave, "application/pdf", arquivo.getSize(), hash));
+                nomeSeguro(arquivo.getOriginalFilename()),
+                chave,
+                "application/pdf",
+                arquivo.getSize(),
+                hash
+        ));
         t.setEnviadoPor(usuario);
         t.setStatus(ehModerador(usuario) ? StatusTrabalho.PUBLICADO : StatusTrabalho.PENDENTE);
 
         try {
             return TrabalhoResponse.from(trabalhoRepository.saveAndFlush(t));
         } catch (DataIntegrityViolationException e) {
-            // Dois envios simultâneos do mesmo PDF passam pelo existsBy...; o UNIQUE do banco barra o segundo.
             String causa = String.valueOf(e.getMostSpecificCause().getMessage());
             if (causa.contains("uk_trabalho_arquivo_hash")) {
                 throw new RegraNegocioException("Este arquivo já foi enviado anteriormente.");
@@ -89,10 +109,6 @@ public class TrabalhoService {
             throw e;
         }
     }
-
-    // ------------------------------------------------------------------
-    // Busca e consulta
-    // ------------------------------------------------------------------
 
     @Transactional(readOnly = true)
     public Page<TrabalhoResponse> buscar(TrabalhoFiltro filtro, Pageable pageable, Usuario usuario) {
@@ -112,10 +128,6 @@ public class TrabalhoService {
         return trabalhoRepository.listarAnosPublicados();
     }
 
-    // ------------------------------------------------------------------
-    // Download
-    // ------------------------------------------------------------------
-
     @Transactional
     public ArquivoDownload baixar(Long id, Usuario usuario, String ipOrigem) {
         Trabalho t = obterVisivel(id, usuario);
@@ -129,22 +141,16 @@ public class TrabalhoService {
         return new ArquivoDownload(recurso, a.getNomeOriginal(), a.getContentType(), a.getTamanhoBytes());
     }
 
-    // ------------------------------------------------------------------
-    // Edição, moderação e exclusão
-    // ------------------------------------------------------------------
-
     @Transactional
     public TrabalhoResponse atualizar(Long id, TrabalhoRequest dados, Usuario usuario) {
         Trabalho t = obter(id);
         validarPermissaoEdicao(t, usuario);
 
-        // Só exige orientador ativo se ele for trocado: trabalhos antigos continuam editáveis.
         Orientador orientador = Objects.equals(t.getOrientador().getId(), dados.orientadorId())
                 ? t.getOrientador()
                 : buscarOrientador(dados.orientadorId());
 
         preencher(t, dados, buscarCurso(dados.cursoId()), orientador);
-        // saveAndFlush dispara o @PreUpdate agora: a resposta já sai com o atualizadoEm novo.
         return TrabalhoResponse.from(trabalhoRepository.saveAndFlush(t));
     }
 
@@ -164,19 +170,14 @@ public class TrabalhoService {
         validarPermissaoEdicao(t, usuario);
         String chave = t.getArquivo().getChaveStorage();
         trabalhoRepository.delete(t);
-        limparArquivoQuando(chave, true); // só apaga o PDF depois que o commit der certo
+        limparArquivoQuando(chave, true);
     }
-
-    // ------------------------------------------------------------------
-    // Auxiliares
-    // ------------------------------------------------------------------
 
     private Trabalho obter(Long id) {
         return trabalhoRepository.findById(id)
                 .orElseThrow(() -> new RecursoNaoEncontradoException("Trabalho", id));
     }
 
-    /** Trabalhos não publicados só aparecem para moderadores e para quem os enviou. */
     private Trabalho obterVisivel(Long id, Usuario usuario) {
         Trabalho t = obter(id);
         if (t.getStatus() != StatusTrabalho.PUBLICADO && !ehModerador(usuario) && !ehDono(t, usuario)) {
@@ -221,15 +222,15 @@ public class TrabalhoService {
         t.setCurso(curso);
         t.setOrientador(orientador);
         t.getAutores().clear();
-        d.autores().forEach(a -> t.getAutores().add(a.trim()));
+        if (d.autores() != null) {
+            d.autores().forEach(a -> t.getAutores().add(a.trim()));
+        }
     }
 
-    /** Organiza o storage por ano/curso: trabalhos/2025/3/uuid.pdf */
     private String gerarChave(Integer ano, Long cursoId) {
         return "trabalhos/%d/%d/%s.pdf".formatted(ano, cursoId, UUID.randomUUID());
     }
 
-    /** Confere o tamanho e a assinatura "%PDF-" (não confia só na extensão nem no Content-Type). */
     private void validarPdf(MultipartFile arquivo) {
         if (arquivo == null || arquivo.isEmpty()) {
             throw new RegraNegocioException("Envie um arquivo PDF.");
@@ -265,11 +266,6 @@ public class TrabalhoService {
         return nome.length() > 255 ? nome.substring(nome.length() - 255) : nome;
     }
 
-    /**
-     * Mantém banco e storage consistentes:
-     * quandoCommit=false → apaga o arquivo se a transação der rollback (upload);
-     * quandoCommit=true  → apaga o arquivo somente após o commit (exclusão).
-     */
     private void limparArquivoQuando(String chave, boolean quandoCommit) {
         TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
             @Override

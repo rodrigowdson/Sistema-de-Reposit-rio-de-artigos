@@ -3,9 +3,6 @@ package br.com.repositorio.model.entity;
 import br.com.repositorio.model.enums.StatusTrabalho;
 import br.com.repositorio.model.enums.TipoTrabalho;
 import jakarta.persistence.*;
-import lombok.Getter;
-import lombok.NoArgsConstructor;
-import lombok.Setter;
 import org.hibernate.annotations.BatchSize;
 
 import java.time.LocalDateTime;
@@ -14,7 +11,6 @@ import java.util.Set;
 
 @Entity
 @Table(name = "trabalho")
-@Getter @Setter @NoArgsConstructor
 public class Trabalho {
 
     @Id
@@ -71,6 +67,8 @@ public class Trabalho {
     @Column(name = "atualizado_em", nullable = false)
     private LocalDateTime atualizadoEm;
 
+    public Trabalho() { }
+
     @PrePersist
     void aoCriar() {
         criadoEm = atualizadoEm = LocalDateTime.now();
@@ -79,5 +77,125 @@ public class Trabalho {
     @PreUpdate
     void aoAtualizar() {
         atualizadoEm = LocalDateTime.now();
+    }
+
+    public Long getId() {
+        return id;
+    }
+
+    public void setId(Long id) {
+        this.id = id;
+    }
+
+    public String getTitulo() {
+        return titulo;
+    }
+
+    public void setTitulo(String titulo) {
+        this.titulo = titulo;
+    }
+
+    public String getResumo() {
+        return resumo;
+    }
+
+    public void setResumo(String resumo) {
+        this.resumo = resumo;
+    }
+
+    public String getPalavrasChave() {
+        return palavrasChave;
+    }
+
+    public void setPalavrasChave(String palavrasChave) {
+        this.palavrasChave = palavrasChave;
+    }
+
+    public TipoTrabalho getTipo() {
+        return tipo;
+    }
+
+    public void setTipo(TipoTrabalho tipo) {
+        this.tipo = tipo;
+    }
+
+    public Integer getAno() {
+        return ano;
+    }
+
+    public void setAno(Integer ano) {
+        this.ano = ano;
+    }
+
+    public StatusTrabalho getStatus() {
+        return status;
+    }
+
+    public void setStatus(StatusTrabalho status) {
+        this.status = status;
+    }
+
+    public Curso getCurso() {
+        return curso;
+    }
+
+    public void setCurso(Curso curso) {
+        this.curso = curso;
+    }
+
+    public Orientador getOrientador() {
+        return orientador;
+    }
+
+    public void setOrientador(Orientador orientador) {
+        this.orientador = orientador;
+    }
+
+    public Usuario getEnviadoPor() {
+        return enviadoPor;
+    }
+
+    public void setEnviadoPor(Usuario enviadoPor) {
+        this.enviadoPor = enviadoPor;
+    }
+
+    public Set<String> getAutores() {
+        return autores;
+    }
+
+    public void setAutores(Set<String> autores) {
+        this.autores = autores;
+    }
+
+    public ArquivoInfo getArquivo() {
+        return arquivo;
+    }
+
+    public void setArquivo(ArquivoInfo arquivo) {
+        this.arquivo = arquivo;
+    }
+
+    public long getTotalDownloads() {
+        return totalDownloads;
+    }
+
+    public void setTotalDownloads(long totalDownloads) {
+        this.totalDownloads = totalDownloads;
+    }
+
+    public LocalDateTime getCriadoEm() {
+        return criadoEm;
+    }
+
+    public void setCriadoEm(LocalDateTime criadoEm) {
+        this.criadoEm = criadoEm;
+    }
+
+    public LocalDateTime getAtualizadoEm() {
+        return atualizadoEm;
+    }
+
+    public void setAtualizadoEm(LocalDateTime atualizadoEm) {
+        this.atualizadoEm = atualizadoEm;
     }
 }

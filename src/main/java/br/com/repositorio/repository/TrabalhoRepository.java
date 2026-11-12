@@ -16,7 +16,6 @@ import java.util.Optional;
 
 public interface TrabalhoRepository extends JpaRepository<Trabalho, Long>, JpaSpecificationExecutor<Trabalho> {
 
-    /** Busca paginada com filtros dinâmicos; já traz curso e orientador (evita N+1). */
     @Override
     @EntityGraph(attributePaths = {"curso", "orientador"})
     Page<Trabalho> findAll(Specification<Trabalho> spec, Pageable pageable);
@@ -30,12 +29,10 @@ public interface TrabalhoRepository extends JpaRepository<Trabalho, Long>, JpaSp
 
     boolean existsByOrientadorId(Long orientadorId);
 
-    /** Incremento atômico: seguro com downloads simultâneos. */
     @Modifying
     @Query("update Trabalho t set t.totalDownloads = t.totalDownloads + 1 where t.id = :id")
     void incrementarDownloads(@Param("id") Long id);
 
-    /** Anos disponíveis, para montar o filtro na tela. */
     @Query("select distinct t.ano from Trabalho t where t.status = br.com.repositorio.model.enums.StatusTrabalho.PUBLICADO order by t.ano desc")
     List<Integer> listarAnosPublicados();
 }
