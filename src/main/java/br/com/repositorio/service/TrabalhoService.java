@@ -15,6 +15,7 @@ import br.com.repositorio.storage.StorageService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.core.io.Resource;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.security.access.AccessDeniedException;
@@ -77,7 +78,16 @@ public class TrabalhoService {
         t.setEnviadoPor(usuario);
         t.setStatus(ehModerador(usuario) ? StatusTrabalho.PUBLICADO : StatusTrabalho.PENDENTE);
 
-        return TrabalhoResponse.from(trabalhoRepository.save(t));
+        try {
+            return TrabalhoResponse.from(trabalhoRepository.saveAndFlush(t));
+        } catch (DataIntegrityViolationException e) {
+            // Dois envios simultâneos do mesmo PDF passam pelo existsBy...; o UNIQUE do banco barra o segundo.
+            String causa = String.valueOf(e.getMostSpecificCause().getMessage());
+            if (causa.contains("uk_trabalho_arquivo_hash")) {
+                throw new RegraNegocioException("Este arquivo já foi enviado anteriormente.");
+            }
+            throw e;
+        }
     }
 
     // ------------------------------------------------------------------
@@ -127,8 +137,15 @@ public class TrabalhoService {
     public TrabalhoResponse atualizar(Long id, TrabalhoRequest dados, Usuario usuario) {
         Trabalho t = obter(id);
         validarPermissaoEdicao(t, usuario);
-        preencher(t, dados, buscarCurso(dados.cursoId()), buscarOrientador(dados.orientadorId()));
-        return TrabalhoResponse.from(t);
+
+        // Só exige orientador ativo se ele for trocado: trabalhos antigos continuam editáveis.
+        Orientador orientador = Objects.equals(t.getOrientador().getId(), dados.orientadorId())
+                ? t.getOrientador()
+                : buscarOrientador(dados.orientadorId());
+
+        preencher(t, dados, buscarCurso(dados.cursoId()), orientador);
+        // saveAndFlush dispara o @PreUpdate agora: a resposta já sai com o atualizadoEm novo.
+        return TrabalhoResponse.from(trabalhoRepository.saveAndFlush(t));
     }
 
     @Transactional
@@ -138,7 +155,7 @@ public class TrabalhoService {
         }
         Trabalho t = obter(id);
         t.setStatus(novoStatus);
-        return TrabalhoResponse.from(t);
+        return TrabalhoResponse.from(trabalhoRepository.saveAndFlush(t));
     }
 
     @Transactional
