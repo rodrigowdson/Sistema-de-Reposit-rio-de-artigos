@@ -73,7 +73,7 @@ CREATE TABLE trabalho_autor (
     nome_autor  VARCHAR(150) NOT NULL,
     PRIMARY KEY (trabalho_id, nome_autor)
 );
-CREATE INDEX idx_trabalho_autor_nome ON trabalho_autor (lower(nome_autor));
+CREATE INDEX idx_trabalho_autor_nome ON trabalho_autor (nome_autor);
 
 -- Auditoria de downloads
 CREATE TABLE download_log (
