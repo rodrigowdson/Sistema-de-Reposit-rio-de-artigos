@@ -1,6 +1,6 @@
 # Repositório de TCCs e Artigos
 
-Spring Boot 3 · Spring Data JPA · PostgreSQL + Flyway · armazenamento local ou AWS S3.
+Spring Boot 3 · Spring Data JPA · MySQL 8 + Flyway · Armazenamento local estruturado em EC2 (AWS Academy).
 
 ## Modelo de dados
 
@@ -53,5 +53,27 @@ dto              requests/responses
 - **Moderação**: ALUNO/PROFESSOR enviam como `PENDENTE`; ADMIN/BIBLIOTECARIO publicam direto ou aprovam depois.
   A busca pública só enxerga `PUBLICADO`.
 - **Busca**: filtros por curso, ano, orientador e tipo + termo livre (cada palavra deve aparecer em título, resumo,
-  palavras-chave ou autor). Para acervos grandes, ative o bloco `tsvector`/GIN comentado em `V1__criar_schema.sql`.
-- **Troca de storage**: `app.storage.tipo=local` ou `s3` no `application.yml`.
+  palavras-chave ou autor). Para acervos grandes no MySQL, ative o `FULLTEXT INDEX` comentado em `V1__criar_schema.sql`.
+- **Armazenamento na EC2**: os PDFs são gravados de forma estruturada no disco da instância EC2 em
+  `{STORAGE_LOCAL_DIR}/trabalhos/{ano}/{cursoId}/{uuid}.pdf`.
+
+## Configuração (EC2 + MySQL)
+
+1. Na instância **EC2 (AWS Academy)**:
+   - No **Security Group**, libere entrada na porta `22` (SSH) e `8080` (aplicação HTTP).
+   - Crie o diretório persistente para os PDFs (fora da pasta do projeto/JAR):
+     ```bash
+     sudo mkdir -p /var/lib/repositorio-tcc/storage
+     sudo chown -R $USER:$USER /var/lib/repositorio-tcc
+     ```
+2. Suba o **MySQL 8** (via `docker compose up -d` ou instalado diretamente na EC2 / RDS).
+3. Copie `.env.example` para `.env`, ajuste `DB_HOST`, `DB_USERNAME`, `DB_PASSWORD` e `STORAGE_LOCAL_DIR`, e rode:
+   ```bash
+   set -a && source .env && set +a
+   mvn clean package -DskipTests
+   java -jar target/sistema-repositorio-artigos-1.0.0.jar
+   ```
+4. Para rodar localmente sem MySQL (H2 em modo MySQL + pasta `storage/`):
+   ```bash
+   mvn spring-boot:run -Dspring-boot.run.profiles=local
+   ```

@@ -1,1 +1,29 @@
+# Build
 target/
+!.mvn/wrapper/maven-wrapper.jar
+frontend/node_modules/
+frontend/dist/
+frontend/.angular/
+
+# Variáveis de ambiente e segredos (nunca commitar credenciais AWS/DB)
+.env
+.env.*
+!.env.example
+*.pem
+aws-backup/backup.env
+aws-backup/restaurado/
+
+# Storage local (apenas pasta na raiz do projeto)
+/storage/
+
+# IDEs
+.idea/
+*.iml
+.vscode/
+.classpath
+.project
+.settings/
+
+# Sistema operacional
+.DS_Store
+Thumbs.db

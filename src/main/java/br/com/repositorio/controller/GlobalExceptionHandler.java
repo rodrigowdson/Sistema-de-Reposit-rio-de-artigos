@@ -7,13 +7,17 @@ import br.com.repositorio.exception.RegraNegocioException;
 import jakarta.servlet.http.HttpServletRequest;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.security.access.AccessDeniedException;
+import org.springframework.security.core.AuthenticationException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.multipart.MaxUploadSizeExceededException;
+import org.springframework.web.multipart.support.MissingServletRequestPartException;
 
 import java.util.List;
 
@@ -108,6 +112,62 @@ public class GlobalExceptionHandler {
                         HttpStatus.PAYLOAD_TOO_LARGE.value(),
                         "Arquivo muito grande",
                         "O arquivo excede o limite máximo permitido para upload.",
+                        request.getRequestURI()
+                ));
+    }
+
+    @ExceptionHandler(AuthenticationException.class)
+    public ResponseEntity<ErroResposta> tratarAutenticacao(
+            AuthenticationException ex,
+            HttpServletRequest request
+    ) {
+        return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                .body(ErroResposta.de(
+                        HttpStatus.UNAUTHORIZED.value(),
+                        "Não autenticado",
+                        "E-mail ou senha inválidos, ou conta inativa.",
+                        request.getRequestURI()
+                ));
+    }
+
+    @ExceptionHandler(MissingServletRequestPartException.class)
+    public ResponseEntity<ErroResposta> tratarParteAusente(
+            MissingServletRequestPartException ex,
+            HttpServletRequest request
+    ) {
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                .body(ErroResposta.de(
+                        HttpStatus.BAD_REQUEST.value(),
+                        "Parte obrigatória ausente",
+                        "Envie o campo multipart '" + ex.getRequestPartName() + "'.",
+                        request.getRequestURI()
+                ));
+    }
+
+    @ExceptionHandler(HttpMessageNotReadableException.class)
+    public ResponseEntity<ErroResposta> tratarJsonInvalido(
+            HttpMessageNotReadableException ex,
+            HttpServletRequest request
+    ) {
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                .body(ErroResposta.de(
+                        HttpStatus.BAD_REQUEST.value(),
+                        "Corpo da requisição inválido",
+                        "Verifique o formato do JSON e os valores informados.",
+                        request.getRequestURI()
+                ));
+    }
+
+    @ExceptionHandler(DataIntegrityViolationException.class)
+    public ResponseEntity<ErroResposta> tratarConflitoIntegridade(
+            DataIntegrityViolationException ex,
+            HttpServletRequest request
+    ) {
+        return ResponseEntity.status(HttpStatus.CONFLICT)
+                .body(ErroResposta.de(
+                        HttpStatus.CONFLICT.value(),
+                        "Conflito de dados",
+                        "Registro duplicado ou em uso por outro cadastro.",
                         request.getRequestURI()
                 ));
     }

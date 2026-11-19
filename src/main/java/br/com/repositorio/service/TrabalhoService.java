@@ -128,6 +128,23 @@ public class TrabalhoService {
         return trabalhoRepository.listarAnosPublicados();
     }
 
+    @Transactional(readOnly = true)
+    public Page<TrabalhoResponse> listarMeus(Usuario usuario, Pageable pageable) {
+        if (usuario == null) {
+            throw new AccessDeniedException("Autenticação necessária para listar seus envios.");
+        }
+        return trabalhoRepository.findByEnviadoPorId(usuario.getId(), pageable)
+                .map(TrabalhoResponse::from);
+    }
+
+    @Transactional(readOnly = true)
+    public ArquivoDownload visualizar(Long id, Usuario usuario) {
+        Trabalho t = obterVisivel(id, usuario);
+        ArquivoInfo a = t.getArquivo();
+        Resource recurso = storage.carregar(a.getChaveStorage());
+        return new ArquivoDownload(recurso, a.getNomeOriginal(), a.getContentType(), a.getTamanhoBytes());
+    }
+
     @Transactional
     public ArquivoDownload baixar(Long id, Usuario usuario, String ipOrigem) {
         Trabalho t = obterVisivel(id, usuario);

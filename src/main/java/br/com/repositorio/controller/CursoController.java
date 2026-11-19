@@ -1,12 +1,11 @@
 package br.com.repositorio.controller;
 
-import br.com.repositorio.model.entity.Curso;
-import br.com.repositorio.repository.CursoRepository;
-import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.PathVariable;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RestController;
+import br.com.repositorio.dto.CursoRequest;
+import br.com.repositorio.dto.CursoResponse;
+import br.com.repositorio.service.CursoService;
+import jakarta.validation.Valid;
+import org.springframework.http.HttpStatus;
+import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 
@@ -14,21 +13,36 @@ import java.util.List;
 @RequestMapping("/cursos")
 public class CursoController {
 
-    private final CursoRepository cursoRepository;
+    private final CursoService service;
 
-    public CursoController(CursoRepository cursoRepository) {
-        this.cursoRepository = cursoRepository;
+    public CursoController(CursoService service) {
+        this.service = service;
     }
 
     @GetMapping
-    public ResponseEntity<List<Curso>> listar() {
-        return ResponseEntity.ok(cursoRepository.findAll());
+    public List<CursoResponse> listar() {
+        return service.listar();
     }
 
     @GetMapping("/{id}")
-    public ResponseEntity<Curso> buscarPorId(@PathVariable Long id) {
-        return cursoRepository.findById(id)
-                .map(ResponseEntity::ok)
-                .orElse(ResponseEntity.notFound().build());
+    public CursoResponse buscar(@PathVariable Long id) {
+        return service.buscarPorId(id);
+    }
+
+    @PostMapping
+    @ResponseStatus(HttpStatus.CREATED)
+    public CursoResponse criar(@RequestBody @Valid CursoRequest requisicao) {
+        return service.criar(requisicao);
+    }
+
+    @PutMapping("/{id}")
+    public CursoResponse atualizar(@PathVariable Long id, @RequestBody @Valid CursoRequest requisicao) {
+        return service.atualizar(id, requisicao);
+    }
+
+    @DeleteMapping("/{id}")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void excluir(@PathVariable Long id) {
+        service.excluir(id);
     }
 }

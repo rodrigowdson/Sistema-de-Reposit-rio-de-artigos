@@ -17,11 +17,14 @@ import java.util.Optional;
 public interface TrabalhoRepository extends JpaRepository<Trabalho, Long>, JpaSpecificationExecutor<Trabalho> {
 
     @Override
-    @EntityGraph(attributePaths = {"curso", "orientador"})
+    @EntityGraph(attributePaths = {"curso", "orientador", "enviadoPor"})
     Page<Trabalho> findAll(Specification<Trabalho> spec, Pageable pageable);
 
-    @EntityGraph(attributePaths = {"curso", "orientador"})
+    @EntityGraph(attributePaths = {"curso", "orientador", "enviadoPor"})
     Optional<Trabalho> findById(Long id);
+
+    @EntityGraph(attributePaths = {"curso", "orientador", "enviadoPor"})
+    Page<Trabalho> findByEnviadoPorId(Long usuarioId, Pageable pageable);
 
     boolean existsByArquivoHashSha256(String hash);
 

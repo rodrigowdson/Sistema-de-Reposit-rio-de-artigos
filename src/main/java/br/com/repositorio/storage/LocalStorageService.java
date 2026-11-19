@@ -1,50 +1,61 @@
 package br.com.repositorio.storage;
 
-import org.springframework.beans.factory.annotation.Value;
+import br.com.repositorio.exception.ArmazenamentoException;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.core.io.FileSystemResource;
 import org.springframework.core.io.Resource;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
+import java.io.InputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.StandardCopyOption;
 
 @Service
+@ConditionalOnProperty(name = "app.storage.tipo", havingValue = "local", matchIfMissing = true)
 public class LocalStorageService implements StorageService {
+
+    private static final Logger log = LoggerFactory.getLogger(LocalStorageService.class);
 
     private final Path baseDir;
 
-    public LocalStorageService(@Value("${app.storage.local-dir:storage}") String localDir) {
-        this.baseDir = Paths.get(localDir).toAbsolutePath().normalize();
+    public LocalStorageService(StorageProperties properties) {
+        this.baseDir = Paths.get(properties.getLocalDir()).toAbsolutePath().normalize();
         try {
             Files.createDirectories(this.baseDir);
         } catch (IOException e) {
-            throw new IllegalStateException("Não foi possível criar o diretório do storage local", e);
+            throw new ArmazenamentoException("Não foi possível criar o diretório do storage local: " + this.baseDir, e);
         }
+        if (!Files.isWritable(this.baseDir)) {
+            throw new ArmazenamentoException("Sem permissão de escrita no diretório do storage local: " + this.baseDir);
+        }
+        log.info("Storage local estruturado inicializado em: {}", this.baseDir);
     }
 
     @Override
     public void salvar(String chave, MultipartFile arquivo) {
-        try {
-            Path destino = baseDir.resolve(chave).normalize();
+        try (InputStream in = arquivo.getInputStream()) {
+            Path destino = resolverSeguro(chave);
             Path pai = destino.getParent();
             if (pai != null) {
                 Files.createDirectories(pai);
             }
-            Files.copy(arquivo.getInputStream(), destino, StandardCopyOption.REPLACE_EXISTING);
+            Files.copy(in, destino, StandardCopyOption.REPLACE_EXISTING);
         } catch (IOException e) {
-            throw new IllegalStateException("Falha ao salvar o arquivo no storage local", e);
+            throw new ArmazenamentoException("Falha ao salvar o arquivo no storage local.", e);
         }
     }
 
     @Override
     public Resource carregar(String chave) {
-        Path caminho = baseDir.resolve(chave).normalize();
+        Path caminho = resolverSeguro(chave);
         if (!Files.exists(caminho)) {
-            throw new IllegalArgumentException("Arquivo não encontrado no storage: " + chave);
+            throw new ArmazenamentoException("Arquivo não encontrado no storage local: " + chave);
         }
         return new FileSystemResource(caminho);
     }
@@ -52,10 +63,27 @@ public class LocalStorageService implements StorageService {
     @Override
     public void remover(String chave) {
         try {
-            Path caminho = baseDir.resolve(chave).normalize();
+            Path caminho = resolverSeguro(chave);
             Files.deleteIfExists(caminho);
         } catch (IOException e) {
-            throw new IllegalStateException("Falha ao remover arquivo do storage local: " + chave, e);
+            throw new ArmazenamentoException("Falha ao remover arquivo do storage local: " + chave, e);
         }
+    }
+
+    @Override
+    public boolean testarConexao() {
+        return Files.isDirectory(baseDir) && Files.isWritable(baseDir);
+    }
+
+    public Path getBaseDir() {
+        return baseDir;
+    }
+
+    private Path resolverSeguro(String chave) {
+        Path destino = baseDir.resolve(chave).normalize();
+        if (!destino.startsWith(baseDir)) {
+            throw new ArmazenamentoException("Chave de armazenamento inválida: " + chave);
+        }
+        return destino;
     }
 }

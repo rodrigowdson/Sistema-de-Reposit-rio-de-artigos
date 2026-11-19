@@ -5,6 +5,7 @@ import br.com.repositorio.model.enums.StatusTrabalho;
 import br.com.repositorio.model.enums.TipoTrabalho;
 
 import java.time.LocalDateTime;
+import java.util.LinkedHashSet;
 import java.util.Set;
 
 public record TrabalhoResponse(
@@ -35,7 +36,7 @@ public record TrabalhoResponse(
                 t.getStatus(),
                 t.getCurso() != null ? t.getCurso().getNome() : null,
                 t.getOrientador() != null ? t.getOrientador().getNome() : null,
-                t.getAutores(),
+                t.getAutores() != null ? new LinkedHashSet<>(t.getAutores()) : Set.of(),
                 t.getArquivo() != null ? t.getArquivo().getNomeOriginal() : null,
                 t.getArquivo() != null ? t.getArquivo().getHashSha256() : null,
                 t.getTotalDownloads(),

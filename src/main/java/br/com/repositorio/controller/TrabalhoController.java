@@ -8,7 +8,9 @@ import br.com.repositorio.dto.TrabalhoResponse;
 import br.com.repositorio.exception.RegraNegocioException;
 import br.com.repositorio.model.entity.Usuario;
 import br.com.repositorio.model.enums.StatusTrabalho;
+import br.com.repositorio.model.enums.TipoTrabalho;
 import br.com.repositorio.repository.UsuarioRepository;
+import br.com.repositorio.security.UsuarioDetails;
 import br.com.repositorio.service.TrabalhoService;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
@@ -31,7 +33,6 @@ import org.springframework.web.util.UriComponentsBuilder;
 import java.net.URI;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
-import java.util.Optional;
 
 @RestController
 @RequestMapping("/trabalhos")
@@ -45,65 +46,58 @@ public class TrabalhoController {
         this.usuarioRepository = usuarioRepository;
     }
 
-    /**
-     * Envia um novo trabalho com seu respectivo arquivo PDF.
-     */
     @PostMapping(consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public ResponseEntity<TrabalhoResponse> enviar(
             @RequestPart("dados") @Valid TrabalhoRequest dados,
             @RequestPart("arquivo") MultipartFile arquivo,
             Authentication authentication,
-            HttpServletRequest request,
             UriComponentsBuilder uriBuilder
     ) {
-        Usuario usuario = resolverUsuario(authentication, request);
+        Usuario usuario = resolverUsuario(authentication);
         TrabalhoResponse response = trabalhoService.enviar(dados, arquivo, usuario);
         URI uri = uriBuilder.path("/trabalhos/{id}").buildAndExpand(response.id()).toUri();
         return ResponseEntity.created(uri).body(response);
     }
 
-    /**
-     * Consulta trabalhos cadastrados com suporte a paginação e filtros dinâmicos.
-     */
     @GetMapping
     public ResponseEntity<Page<TrabalhoResponse>> buscar(
-            @ModelAttribute TrabalhoFiltro filtro,
+            @RequestParam(required = false) Long cursoId,
+            @RequestParam(required = false) Long orientadorId,
+            @RequestParam(required = false) Integer ano,
+            @RequestParam(required = false) TipoTrabalho tipo,
+            @RequestParam(required = false) StatusTrabalho status,
+            @RequestParam(required = false) String termo,
             @PageableDefault(size = 20, sort = "ano", direction = Sort.Direction.DESC) Pageable pageable,
-            Authentication authentication,
-            HttpServletRequest request
+            Authentication authentication
     ) {
-        Usuario usuario = resolverUsuario(authentication, request);
-        Page<TrabalhoResponse> resultado = trabalhoService.buscar(filtro, pageable, usuario);
-        return ResponseEntity.ok(resultado);
+        TrabalhoFiltro filtro = new TrabalhoFiltro(cursoId, orientadorId, ano, tipo, status, termo);
+        Usuario usuario = resolverUsuario(authentication);
+        return ResponseEntity.ok(trabalhoService.buscar(filtro, pageable, usuario));
     }
 
-    /**
-     * Busca os detalhes de um trabalho específico por ID.
-     */
+    @GetMapping("/anos")
+    public ResponseEntity<List<Integer>> listarAnos() {
+        return ResponseEntity.ok(trabalhoService.listarAnos());
+    }
+
+    @GetMapping("/meus")
+    public ResponseEntity<Page<TrabalhoResponse>> listarMeus(
+            @PageableDefault(size = 20, sort = "criadoEm", direction = Sort.Direction.DESC) Pageable pageable,
+            Authentication authentication
+    ) {
+        Usuario usuario = resolverUsuario(authentication);
+        return ResponseEntity.ok(trabalhoService.listarMeus(usuario, pageable));
+    }
+
     @GetMapping("/{id}")
     public ResponseEntity<TrabalhoResponse> buscarPorId(
             @PathVariable Long id,
-            Authentication authentication,
-            HttpServletRequest request
+            Authentication authentication
     ) {
-        Usuario usuario = resolverUsuario(authentication, request);
-        TrabalhoResponse response = trabalhoService.buscarPorId(id, usuario);
-        return ResponseEntity.ok(response);
+        Usuario usuario = resolverUsuario(authentication);
+        return ResponseEntity.ok(trabalhoService.buscarPorId(id, usuario));
     }
 
-    /**
-     * Lista todos os anos com trabalhos publicados em ordem decrescente.
-     */
-    @GetMapping("/anos")
-    public ResponseEntity<List<Integer>> listarAnos() {
-        List<Integer> anos = trabalhoService.listarAnos();
-        return ResponseEntity.ok(anos);
-    }
-
-    /**
-     * Realiza o download do arquivo PDF associado ao trabalho.
-     * Suporta visualização inline através do parâmetro ?inline=true.
-     */
     @GetMapping("/{id}/download")
     public ResponseEntity<Resource> baixar(
             @PathVariable Long id,
@@ -111,123 +105,101 @@ public class TrabalhoController {
             Authentication authentication,
             HttpServletRequest request
     ) {
-        Usuario usuario = resolverUsuario(authentication, request);
-        String ipOrigem = extrairIp(request);
-        ArquivoDownload download = trabalhoService.baixar(id, usuario, ipOrigem);
+        Usuario usuario = resolverUsuario(authentication);
+        ArquivoDownload download = inline
+                ? trabalhoService.visualizar(id, usuario)
+                : trabalhoService.baixar(id, usuario, extrairIp(request));
 
         ContentDisposition.Builder dispositionBuilder = inline
                 ? ContentDisposition.inline()
                 : ContentDisposition.attachment();
 
-        ContentDisposition disposition = dispositionBuilder
-                .filename(download.nomeOriginal(), StandardCharsets.UTF_8)
-                .build();
+        String nome = StringUtils.hasText(download.nomeOriginal()) ? download.nomeOriginal() : "trabalho.pdf";
+        boolean apenasAscii = StandardCharsets.US_ASCII.newEncoder().canEncode(nome);
+        ContentDisposition disposition = apenasAscii
+                ? dispositionBuilder.filename(nome).build()
+                : dispositionBuilder.filename(nome, StandardCharsets.UTF_8).build();
 
-        return ResponseEntity.ok()
+        ResponseEntity.BodyBuilder resposta = ResponseEntity.ok()
                 .contentType(MediaType.parseMediaType(download.contentType()))
-                .contentLength(download.tamanhoBytes())
-                .header(HttpHeaders.CONTENT_DISPOSITION, disposition.toString())
-                .body(download.resource());
+                .header(HttpHeaders.CONTENT_DISPOSITION, disposition.toString());
+
+        if (download.tamanhoBytes() != null) {
+            resposta.contentLength(download.tamanhoBytes());
+        }
+
+        return resposta.body(download.resource());
     }
 
-    /**
-     * Atualiza os metadados de um trabalho existente.
-     */
     @PutMapping("/{id}")
     public ResponseEntity<TrabalhoResponse> atualizar(
             @PathVariable Long id,
             @RequestBody @Valid TrabalhoRequest dados,
-            Authentication authentication,
-            HttpServletRequest request
+            Authentication authentication
     ) {
-        Usuario usuario = resolverUsuario(authentication, request);
-        TrabalhoResponse response = trabalhoService.atualizar(id, dados, usuario);
-        return ResponseEntity.ok(response);
+        Usuario usuario = resolverUsuario(authentication);
+        return ResponseEntity.ok(trabalhoService.atualizar(id, dados, usuario));
     }
 
-    /**
-     * Altera o status de moderação do trabalho (PENDENTE, PUBLICADO, ARQUIVADO).
-     * O status pode ser enviado no corpo da requisição JSON ou como parâmetro de consulta.
-     */
     @PatchMapping("/{id}/status")
     public ResponseEntity<TrabalhoResponse> alterarStatus(
             @PathVariable Long id,
             @RequestBody(required = false) @Valid AlterarStatusRequest requestBody,
             @RequestParam(name = "status", required = false) StatusTrabalho statusParam,
-            Authentication authentication,
-            HttpServletRequest request
+            Authentication authentication
     ) {
         StatusTrabalho novoStatus = (requestBody != null && requestBody.status() != null)
                 ? requestBody.status()
                 : statusParam;
 
         if (novoStatus == null) {
-            throw new RegraNegocioException("O novo status deve ser informado no corpo da requisição ou como parâmetro 'status'.");
+            throw new RegraNegocioException("Informe o novo status no corpo JSON ou no parâmetro 'status'.");
         }
 
-        Usuario usuario = resolverUsuario(authentication, request);
-        TrabalhoResponse response = trabalhoService.alterarStatus(id, novoStatus, usuario);
-        return ResponseEntity.ok(response);
+        Usuario usuario = resolverUsuario(authentication);
+        return ResponseEntity.ok(trabalhoService.alterarStatus(id, novoStatus, usuario));
     }
 
-    /**
-     * Exclui um trabalho e seu respectivo arquivo físico.
-     */
     @DeleteMapping("/{id}")
     public ResponseEntity<Void> excluir(
             @PathVariable Long id,
-            Authentication authentication,
-            HttpServletRequest request
+            Authentication authentication
     ) {
-        Usuario usuario = resolverUsuario(authentication, request);
+        Usuario usuario = resolverUsuario(authentication);
         trabalhoService.excluir(id, usuario);
         return ResponseEntity.noContent().build();
+    }
+
+    private Usuario resolverUsuario(Authentication authentication) {
+        if (authentication == null || !authentication.isAuthenticated()
+                || authentication instanceof AnonymousAuthenticationToken) {
+            return null;
+        }
+        Object principal = authentication.getPrincipal();
+        if (principal instanceof UsuarioDetails details) {
+            return details.getUsuario();
+        }
+        if (principal instanceof Usuario usuario) {
+            return usuario;
+        }
+        String email = authentication.getName();
+        if (StringUtils.hasText(email)) {
+            return usuarioRepository.findByEmailIgnoreCase(email).orElse(null);
+        }
+        return null;
     }
 
     private String extrairIp(HttpServletRequest request) {
         if (request == null) {
             return null;
         }
-        String xForwardedFor = request.getHeader("X-Forwarded-For");
-        if (StringUtils.hasText(xForwardedFor)) {
-            return xForwardedFor.split(",")[0].trim();
+        String forwarded = request.getHeader("X-Forwarded-For");
+        String ip = StringUtils.hasText(forwarded)
+                ? forwarded.split(",")[0].trim()
+                : request.getRemoteAddr();
+        if (ip == null) {
+            return null;
         }
-        return request.getRemoteAddr();
-    }
-
-    private Usuario resolverUsuario(Authentication authentication, HttpServletRequest request) {
-        if (authentication != null && authentication.isAuthenticated()
-                && !(authentication instanceof AnonymousAuthenticationToken)) {
-            Object principal = authentication.getPrincipal();
-            if (principal instanceof Usuario u) {
-                return u;
-            }
-            String email = authentication.getName();
-            if (StringUtils.hasText(email)) {
-                Optional<Usuario> usuario = usuarioRepository.findByEmail(email);
-                if (usuario.isPresent()) {
-                    return usuario.get();
-                }
-            }
-        }
-
-        if (request != null) {
-            String emailHeader = request.getHeader("X-Usuario-Email");
-            if (StringUtils.hasText(emailHeader)) {
-                Optional<Usuario> usuario = usuarioRepository.findByEmail(emailHeader);
-                if (usuario.isPresent()) {
-                    return usuario.get();
-                }
-            }
-            String idHeader = request.getHeader("X-Usuario-Id");
-            if (StringUtils.hasText(idHeader)) {
-                try {
-                    return usuarioRepository.findById(Long.parseLong(idHeader)).orElse(null);
-                } catch (NumberFormatException ignored) {
-                }
-            }
-        }
-
-        return null;
+        return ip.length() > 45 ? ip.substring(0, 45) : ip;
     }
 }

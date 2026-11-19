@@ -1,13 +1,12 @@
 package br.com.repositorio.controller;
 
-import br.com.repositorio.model.entity.Orientador;
-import br.com.repositorio.repository.OrientadorRepository;
-import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.PathVariable;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RequestParam;
-import org.springframework.web.bind.annotation.RestController;
+import br.com.repositorio.dto.AtivoRequest;
+import br.com.repositorio.dto.OrientadorRequest;
+import br.com.repositorio.dto.OrientadorResponse;
+import br.com.repositorio.service.OrientadorService;
+import jakarta.validation.Valid;
+import org.springframework.http.HttpStatus;
+import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 
@@ -15,25 +14,35 @@ import java.util.List;
 @RequestMapping("/orientadores")
 public class OrientadorController {
 
-    private final OrientadorRepository orientadorRepository;
+    private final OrientadorService service;
 
-    public OrientadorController(OrientadorRepository orientadorRepository) {
-        this.orientadorRepository = orientadorRepository;
+    public OrientadorController(OrientadorService service) {
+        this.service = service;
     }
 
     @GetMapping
-    public ResponseEntity<List<Orientador>> listar(@RequestParam(name = "apenasAtivos", defaultValue = "false") boolean apenasAtivos) {
-        List<Orientador> todos = orientadorRepository.findAll();
-        if (apenasAtivos) {
-            return ResponseEntity.ok(todos.stream().filter(Orientador::isAtivo).toList());
-        }
-        return ResponseEntity.ok(todos);
+    public List<OrientadorResponse> listar(@RequestParam(defaultValue = "false") boolean apenasAtivos) {
+        return service.listar(apenasAtivos);
     }
 
     @GetMapping("/{id}")
-    public ResponseEntity<Orientador> buscarPorId(@PathVariable Long id) {
-        return orientadorRepository.findById(id)
-                .map(ResponseEntity::ok)
-                .orElse(ResponseEntity.notFound().build());
+    public OrientadorResponse buscar(@PathVariable Long id) {
+        return service.buscarPorId(id);
+    }
+
+    @PostMapping
+    @ResponseStatus(HttpStatus.CREATED)
+    public OrientadorResponse criar(@RequestBody @Valid OrientadorRequest requisicao) {
+        return service.criar(requisicao);
+    }
+
+    @PutMapping("/{id}")
+    public OrientadorResponse atualizar(@PathVariable Long id, @RequestBody @Valid OrientadorRequest requisicao) {
+        return service.atualizar(id, requisicao);
+    }
+
+    @PatchMapping("/{id}/ativo")
+    public OrientadorResponse atualizarAtivo(@PathVariable Long id, @RequestBody @Valid AtivoRequest requisicao) {
+        return service.alterarAtivo(id, requisicao.ativo());
     }
 }
