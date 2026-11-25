@@ -1,10 +1,11 @@
 import { Component, OnInit, inject, input, signal } from '@angular/core';
-import { RouterLink } from '@angular/router';
+import { Router, RouterLink } from '@angular/router';
 import {
   Trabalho,
   extrairMensagemErro,
   rotuloTipo,
 } from '../../core/models/repositorio.models';
+import { AuthService } from '../../core/services/auth.service';
 import { ToastService } from '../../core/services/toast.service';
 import { TrabalhoService } from '../../core/services/trabalho.service';
 import { PdfViewerComponent } from '../../shared/components/pdf-viewer.component';
@@ -149,6 +150,17 @@ import { StatusBadgeComponent } from '../../shared/components/status-badge.compo
                   </div>
                 }
               </div>
+
+              @if (podeAlterar()) {
+                <div class="pt-3 border-t border-stone-200 flex gap-2">
+                  <a [routerLink]="['/trabalhos', trabalho()!.id, 'editar']" class="btn-secondary flex-1 text-center">
+                    Editar ficha
+                  </a>
+                  <button type="button" (click)="excluir()" class="btn-danger flex-1">
+                    Excluir
+                  </button>
+                </div>
+              }
             </div>
           </div>
         </div>
@@ -161,6 +173,8 @@ import { StatusBadgeComponent } from '../../shared/components/status-badge.compo
   `,
 })
 export class TrabalhoDetalheComponent implements OnInit {
+  private readonly auth = inject(AuthService);
+  private readonly router = inject(Router);
   private readonly trabalhoService = inject(TrabalhoService);
   private readonly toast = inject(ToastService);
 
@@ -169,6 +183,30 @@ export class TrabalhoDetalheComponent implements OnInit {
   readonly carregando = signal(true);
   readonly baixando = signal(false);
   readonly mostrarVisualizador = signal(true);
+
+  podeAlterar(): boolean {
+    const t = this.trabalho();
+    if (!t || !this.auth.estaAutenticado()) return false;
+    if (this.auth.podeModerar()) return true;
+    return t.status === 'PENDENTE' && t.enviadoPorId === this.auth.usuario()?.id;
+  }
+
+  excluir(): void {
+    const t = this.trabalho();
+    if (!t) return;
+    if (!confirm(`Deseja realmente excluir "${t.titulo}"? O arquivo PDF também será removido.`)) {
+      return;
+    }
+    this.trabalhoService.excluir(t.id).subscribe({
+      next: () => {
+        this.toast.sucesso('Trabalho excluído com sucesso.');
+        this.router.navigate(['/']);
+      },
+      error: (err) => {
+        this.toast.erro(extrairMensagemErro(err, 'Não foi possível excluir o trabalho.'));
+      },
+    });
+  }
 
   ngOnInit(): void {
     const trabalhoId = Number(this.id());

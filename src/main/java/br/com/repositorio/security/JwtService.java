@@ -5,7 +5,10 @@ import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.JwtException;
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.security.Keys;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
+import org.springframework.util.StringUtils;
 
 import javax.crypto.SecretKey;
 import java.nio.charset.StandardCharsets;
@@ -19,11 +22,21 @@ import java.util.Optional;
 @Service
 public class JwtService {
 
+    private static final Logger log = LoggerFactory.getLogger(JwtService.class);
+    private static final String SEGREDO_PADRAO_DEV = "troque-esta-chave-jwt-em-producao-por-uma-string-longa-e-aleatoria";
+
     private final SecretKey chave;
     private final long expiracaoHoras;
 
     public JwtService(SecurityProperties properties) {
         String segredo = properties.getJwt().getSecret();
+        if (!StringUtils.hasText(segredo)) {
+            throw new IllegalStateException("Configure JWT_SECRET (app.security.jwt.secret).");
+        }
+        if (SEGREDO_PADRAO_DEV.equals(segredo)
+                || "troque-por-uma-chave-secreta-aleatoria-com-mais-de-32-caracteres".equals(segredo)) {
+            log.warn("ATENÇÃO: Usando chave JWT padrão de desenvolvimento. Em produção na EC2, defina JWT_SECRET com um valor aleatório forte.");
+        }
         this.chave = Keys.hmacShaKeyFor(derivarChave256Bits(segredo));
         this.expiracaoHoras = Math.max(1L, properties.getJwt().getExpiracaoHoras());
     }

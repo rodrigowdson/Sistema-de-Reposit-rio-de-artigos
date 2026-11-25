@@ -1,6 +1,7 @@
 # Build
-target/
-!.mvn/wrapper/maven-wrapper.jar
+build/
+.gradle/
+!gradle/wrapper/gradle-wrapper.jar
 frontend/node_modules/
 frontend/dist/
 frontend/.angular/
@@ -10,11 +11,16 @@ frontend/.angular/
 .env.*
 !.env.example
 *.pem
+ec2/deploy.env
+ec2/chaves/*
+!ec2/chaves/COLOQUE_SUA_CHAVE_AQUI.txt
 aws-backup/backup.env
 aws-backup/restaurado/
 
-# Storage local (apenas pasta na raiz do projeto)
+# Storage local e PDFs da fila de envio
 /storage/
+/livros/*.pdf
+/livros/**/*.pdf
 
 # IDEs
 .idea/

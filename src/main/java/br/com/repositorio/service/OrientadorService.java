@@ -22,15 +22,32 @@ public class OrientadorService {
 
     @Transactional(readOnly = true)
     public List<OrientadorResponse> listar(boolean apenasAtivos) {
-        List<Orientador> lista = apenasAtivos
+        return listar(apenasAtivos, true);
+    }
+
+    @Transactional(readOnly = true)
+    public List<OrientadorResponse> listar(boolean apenasAtivos, boolean incluirDadosRestritos) {
+        boolean filtrarAtivos = !incluirDadosRestritos || apenasAtivos;
+        List<Orientador> lista = filtrarAtivos
                 ? orientadorRepository.findByAtivoTrueOrderByNomeAsc()
                 : orientadorRepository.findAllByOrderByNomeAsc();
-        return lista.stream().map(OrientadorResponse::from).toList();
+        return lista.stream()
+                .map(incluirDadosRestritos ? OrientadorResponse::from : OrientadorResponse::fromPublico)
+                .toList();
     }
 
     @Transactional(readOnly = true)
     public OrientadorResponse buscarPorId(Long id) {
-        return OrientadorResponse.from(obter(id));
+        return buscarPorId(id, true);
+    }
+
+    @Transactional(readOnly = true)
+    public OrientadorResponse buscarPorId(Long id, boolean incluirDadosRestritos) {
+        Orientador orientador = obter(id);
+        if (!incluirDadosRestritos && !orientador.isAtivo()) {
+            throw new RecursoNaoEncontradoException("Orientador", id);
+        }
+        return incluirDadosRestritos ? OrientadorResponse.from(orientador) : OrientadorResponse.fromPublico(orientador);
     }
 
     @Transactional

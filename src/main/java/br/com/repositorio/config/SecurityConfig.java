@@ -7,6 +7,7 @@ import br.com.repositorio.security.UsuarioDetailsService;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;
@@ -48,7 +49,8 @@ public class SecurityConfig {
     public SecurityFilterChain securityFilterChain(
             HttpSecurity http,
             JwtService jwtService,
-            UsuarioDetailsService usuarioDetailsService
+            UsuarioDetailsService usuarioDetailsService,
+            @Value("${spring.h2.console.enabled:false}") boolean h2ConsoleHabilitado
     ) throws Exception {
         JwtAuthenticationFilter jwtFilter = new JwtAuthenticationFilter(jwtService, usuarioDetailsService);
 
@@ -63,22 +65,26 @@ public class SecurityConfig {
                         .accessDeniedHandler((req, res, e) ->
                                 escreverErro(req, res, HttpStatus.FORBIDDEN, "Acesso negado", "Você não tem permissão para acessar este recurso."))
                 )
-                .authorizeHttpRequests(auth -> auth
-                        .requestMatchers("/auth/login", "/auth/registrar", "/status", "/h2-console/**", "/error").permitAll()
-                        .requestMatchers(HttpMethod.GET, "/trabalhos/meus").authenticated()
-                        .requestMatchers(HttpMethod.GET,
-                                "/trabalhos", "/trabalhos/**",
-                                "/cursos", "/cursos/**",
-                                "/orientadores", "/orientadores/**"
-                        ).permitAll()
-                        .requestMatchers("/usuarios", "/usuarios/**").hasRole("ADMIN")
-                        .requestMatchers("/backups", "/backups/**").hasRole("ADMIN")
-                        .requestMatchers(HttpMethod.POST, "/cursos", "/orientadores").hasAnyRole("ADMIN", "BIBLIOTECARIO")
-                        .requestMatchers(HttpMethod.PUT, "/cursos/**", "/orientadores/**").hasAnyRole("ADMIN", "BIBLIOTECARIO")
-                        .requestMatchers(HttpMethod.PATCH, "/orientadores/**", "/trabalhos/*/status").hasAnyRole("ADMIN", "BIBLIOTECARIO")
-                        .requestMatchers(HttpMethod.DELETE, "/cursos/**").hasAnyRole("ADMIN", "BIBLIOTECARIO")
-                        .anyRequest().authenticated()
-                )
+                .authorizeHttpRequests(auth -> {
+                    auth.requestMatchers("/auth/login", "/auth/registrar", "/status", "/error").permitAll();
+                    if (h2ConsoleHabilitado) {
+                        auth.requestMatchers("/h2-console/**").permitAll();
+                    }
+                    auth
+                            .requestMatchers(HttpMethod.GET, "/trabalhos/meus").authenticated()
+                            .requestMatchers(HttpMethod.GET,
+                                    "/trabalhos", "/trabalhos/**",
+                                    "/cursos", "/cursos/**",
+                                    "/orientadores", "/orientadores/**"
+                            ).permitAll()
+                            .requestMatchers("/usuarios", "/usuarios/**").hasRole("ADMIN")
+                            .requestMatchers("/backups", "/backups/**").hasRole("ADMIN")
+                            .requestMatchers(HttpMethod.POST, "/cursos", "/orientadores").hasAnyRole("ADMIN", "BIBLIOTECARIO")
+                            .requestMatchers(HttpMethod.PUT, "/cursos/**", "/orientadores/**").hasAnyRole("ADMIN", "BIBLIOTECARIO")
+                            .requestMatchers(HttpMethod.PATCH, "/orientadores/**", "/trabalhos/*/status").hasAnyRole("ADMIN", "BIBLIOTECARIO")
+                            .requestMatchers(HttpMethod.DELETE, "/cursos/**").hasAnyRole("ADMIN", "BIBLIOTECARIO")
+                            .anyRequest().authenticated();
+                })
                 .addFilterBefore(jwtFilter, UsernamePasswordAuthenticationFilter.class);
 
         return http.build();

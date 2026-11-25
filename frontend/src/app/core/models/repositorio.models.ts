@@ -31,7 +31,7 @@ export interface CursoRequest {
 export interface Orientador {
   id: number;
   nome: string;
-  email: string;
+  email: string | null;
   titulacao: string | null;
   ativo: boolean;
 }
@@ -66,8 +66,11 @@ export interface Trabalho {
   tipo: TipoTrabalho;
   ano: number;
   status: StatusTrabalho;
+  cursoId: number | null;
   cursoNome: string | null;
+  orientadorId: number | null;
   orientadorNome: string | null;
+  enviadoPorId: number | null;
   autores: string[];
   arquivoNomeOriginal: string | null;
   arquivoHashSha256: string | null;

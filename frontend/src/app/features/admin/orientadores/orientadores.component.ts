@@ -190,7 +190,7 @@ export class OrientadoresComponent implements OnInit {
     this.editandoId.set(ori.id);
     this.form.setValue({
       nome: ori.nome,
-      email: ori.email,
+      email: ori.email || '',
       titulacao: ori.titulacao || '',
     });
   }

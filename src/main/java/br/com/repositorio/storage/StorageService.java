@@ -11,6 +11,10 @@ public interface StorageService {
 
     void remover(String chave);
 
+    default void mover(String chaveOrigem, String chaveDestino) {
+        throw new UnsupportedOperationException("Movimentação de arquivo não suportada neste storage.");
+    }
+
     default boolean testarConexao() {
         return true;
     }

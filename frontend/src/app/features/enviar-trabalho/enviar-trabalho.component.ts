@@ -10,6 +10,7 @@ import {
   TrabalhoRequest,
   extrairMensagemErro,
 } from '../../core/models/repositorio.models';
+import { AuthService } from '../../core/services/auth.service';
 import { CursoService } from '../../core/services/curso.service';
 import { OrientadorService } from '../../core/services/orientador.service';
 import { ToastService } from '../../core/services/toast.service';
@@ -157,7 +158,7 @@ import { TrabalhoService } from '../../core/services/trabalho.service';
                     Arraste o PDF para esta área ou clique para selecionar
                   </p>
                   <p class="text-xs text-stone-500 mt-1">
-                    Apenas arquivos PDF válidos (máximo 50 MB)
+                    Apenas arquivos PDF válidos (máximo 100 MB)
                   </p>
                 }
               </div>
@@ -196,6 +197,7 @@ import { TrabalhoService } from '../../core/services/trabalho.service';
 })
 export class EnviarTrabalhoComponent implements OnInit {
   private readonly fb = inject(FormBuilder);
+  private readonly auth = inject(AuthService);
   private readonly trabalhoService = inject(TrabalhoService);
   private readonly cursoService = inject(CursoService);
   private readonly orientadorService = inject(OrientadorService);
@@ -211,6 +213,8 @@ export class EnviarTrabalhoComponent implements OnInit {
   readonly enviando = signal(false);
   readonly progresso = signal(0);
   readonly modoEdicao = signal(false);
+
+  private orientadorVinculado: { id: number; nome: string } | null = null;
 
   readonly form = this.fb.group({
     titulo: ['', [Validators.required, Validators.maxLength(300)]],
@@ -228,35 +232,41 @@ export class EnviarTrabalhoComponent implements OnInit {
     this.modoEdicao.set(!!trabalhoId);
 
     this.cursoService.listar().subscribe({
-      next: (lista) => {
-        this.cursos.set(lista);
-        if (trabalhoId) this.tentarPreencherRelacionamentos();
-      },
+      next: (lista) => this.cursos.set(lista),
     });
 
-    this.orientadorService.listar(!trabalhoId).subscribe({
+    this.orientadorService.listar(!this.auth.podeModerar()).subscribe({
       next: (lista) => {
         this.orientadores.set(lista);
-        if (trabalhoId) this.tentarPreencherRelacionamentos();
+        this.garantirOrientadorVinculadoNaLista();
       },
     });
 
     if (trabalhoId) {
       this.trabalhoService.buscarPorId(trabalhoId).subscribe({
         next: (t) => {
-          this.trabalhoCarregado = {
-            cursoNome: t.cursoNome,
-            orientadorNome: t.orientadorNome,
-          };
+          if (!this.auth.podeModerar() && t.status !== 'PENDENTE') {
+            this.toast.erro('Apenas trabalhos em homologação (pendentes) podem ser editados pelo autor.');
+            this.router.navigate(['/trabalhos', t.id]);
+            return;
+          }
+          if (t.orientadorId) {
+            this.orientadorVinculado = {
+              id: t.orientadorId,
+              nome: t.orientadorNome || 'Orientador vinculado',
+            };
+            this.garantirOrientadorVinculadoNaLista();
+          }
           this.form.patchValue({
             titulo: t.titulo,
             tipo: t.tipo,
             ano: t.ano,
+            cursoId: t.cursoId,
+            orientadorId: t.orientadorId,
             autoresTexto: t.autores.join(', '),
             resumo: t.resumo || '',
             palavrasChave: t.palavrasChave || '',
           });
-          this.tentarPreencherRelacionamentos();
         },
         error: (err) => {
           this.toast.erro(extrairMensagemErro(err, 'Não foi possível carregar o trabalho para edição.'));
@@ -266,19 +276,14 @@ export class EnviarTrabalhoComponent implements OnInit {
     }
   }
 
-  private trabalhoCarregado: { cursoNome: string | null; orientadorNome: string | null } | null = null;
-
-  private tentarPreencherRelacionamentos(): void {
-    if (!this.trabalhoCarregado) return;
-    if (!this.form.value.cursoId && this.trabalhoCarregado.cursoNome) {
-      const curso = this.cursos().find((c) => c.nome === this.trabalhoCarregado!.cursoNome);
-      if (curso) this.form.patchValue({ cursoId: curso.id });
-    }
-    if (!this.form.value.orientadorId && this.trabalhoCarregado.orientadorNome) {
-      const orientador = this.orientadores().find(
-        (o) => o.nome === this.trabalhoCarregado!.orientadorNome
-      );
-      if (orientador) this.form.patchValue({ orientadorId: orientador.id });
+  private garantirOrientadorVinculadoNaLista(): void {
+    const vinculo = this.orientadorVinculado;
+    if (!vinculo) return;
+    if (!this.orientadores().some((o) => o.id === vinculo.id)) {
+      this.orientadores.update((lista) => [
+        ...lista,
+        { id: vinculo.id, nome: `${vinculo.nome} (inativo)`, email: null, titulacao: null, ativo: false },
+      ]);
     }
   }
 
@@ -303,6 +308,10 @@ export class EnviarTrabalhoComponent implements OnInit {
   private validarESelecionarArquivo(file: File): void {
     if (!file.name.toLowerCase().endsWith('.pdf') && file.type !== 'application/pdf') {
       this.toast.erro('Selecione apenas arquivos no formato PDF.');
+      return;
+    }
+    if (file.size > 100 * 1024 * 1024) {
+      this.toast.erro('O arquivo PDF excede o limite máximo de 100 MB.');
       return;
     }
     this.arquivoSelecionado.set(file);

@@ -71,7 +71,13 @@ public class Trabalho {
 
     @PrePersist
     void aoCriar() {
-        criadoEm = atualizadoEm = LocalDateTime.now();
+        LocalDateTime agora = LocalDateTime.now();
+        if (criadoEm == null) {
+            criadoEm = agora;
+        }
+        if (atualizadoEm == null) {
+            atualizadoEm = criadoEm;
+        }
     }
 
     @PreUpdate

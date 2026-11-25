@@ -2,6 +2,7 @@ package br.com.repositorio.controller;
 
 import br.com.repositorio.dto.AlterarStatusRequest;
 import br.com.repositorio.dto.ArquivoDownload;
+import br.com.repositorio.dto.PaginaResponse;
 import br.com.repositorio.dto.TrabalhoFiltro;
 import br.com.repositorio.dto.TrabalhoRequest;
 import br.com.repositorio.dto.TrabalhoResponse;
@@ -60,7 +61,7 @@ public class TrabalhoController {
     }
 
     @GetMapping
-    public ResponseEntity<Page<TrabalhoResponse>> buscar(
+    public ResponseEntity<PaginaResponse<TrabalhoResponse>> buscar(
             @RequestParam(required = false) Long cursoId,
             @RequestParam(required = false) Long orientadorId,
             @RequestParam(required = false) Integer ano,
@@ -72,7 +73,8 @@ public class TrabalhoController {
     ) {
         TrabalhoFiltro filtro = new TrabalhoFiltro(cursoId, orientadorId, ano, tipo, status, termo);
         Usuario usuario = resolverUsuario(authentication);
-        return ResponseEntity.ok(trabalhoService.buscar(filtro, pageable, usuario));
+        Page<TrabalhoResponse> pagina = trabalhoService.buscar(filtro, pageable, usuario);
+        return ResponseEntity.ok(PaginaResponse.from(pagina));
     }
 
     @GetMapping("/anos")
@@ -81,12 +83,13 @@ public class TrabalhoController {
     }
 
     @GetMapping("/meus")
-    public ResponseEntity<Page<TrabalhoResponse>> listarMeus(
+    public ResponseEntity<PaginaResponse<TrabalhoResponse>> listarMeus(
             @PageableDefault(size = 20, sort = "criadoEm", direction = Sort.Direction.DESC) Pageable pageable,
             Authentication authentication
     ) {
         Usuario usuario = resolverUsuario(authentication);
-        return ResponseEntity.ok(trabalhoService.listarMeus(usuario, pageable));
+        Page<TrabalhoResponse> pagina = trabalhoService.listarMeus(usuario, pageable);
+        return ResponseEntity.ok(PaginaResponse.from(pagina));
     }
 
     @GetMapping("/{id}")

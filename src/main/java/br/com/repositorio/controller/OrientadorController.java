@@ -3,9 +3,12 @@ package br.com.repositorio.controller;
 import br.com.repositorio.dto.AtivoRequest;
 import br.com.repositorio.dto.OrientadorRequest;
 import br.com.repositorio.dto.OrientadorResponse;
+import br.com.repositorio.security.UsuarioDetails;
 import br.com.repositorio.service.OrientadorService;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.GrantedAuthority;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -21,13 +24,34 @@ public class OrientadorController {
     }
 
     @GetMapping
-    public List<OrientadorResponse> listar(@RequestParam(defaultValue = "false") boolean apenasAtivos) {
-        return service.listar(apenasAtivos);
+    public List<OrientadorResponse> listar(
+            @RequestParam(defaultValue = "false") boolean apenasAtivos,
+            Authentication authentication
+    ) {
+        return service.listar(apenasAtivos, ehModerador(authentication));
     }
 
     @GetMapping("/{id}")
-    public OrientadorResponse buscar(@PathVariable Long id) {
-        return service.buscarPorId(id);
+    public OrientadorResponse buscar(@PathVariable Long id, Authentication authentication) {
+        return service.buscarPorId(id, ehModerador(authentication));
+    }
+
+    private boolean ehModerador(Authentication authentication) {
+        if (authentication == null || !authentication.isAuthenticated()) {
+            return false;
+        }
+        if (authentication.getPrincipal() instanceof UsuarioDetails details
+                && details.getUsuario() != null
+                && details.getUsuario().getPerfil() != null) {
+            return details.getUsuario().getPerfil().podeModerar();
+        }
+        for (GrantedAuthority authority : authentication.getAuthorities()) {
+            String role = authority.getAuthority();
+            if ("ROLE_ADMIN".equals(role) || "ROLE_BIBLIOTECARIO".equals(role)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     @PostMapping

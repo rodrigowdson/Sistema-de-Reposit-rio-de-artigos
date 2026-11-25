@@ -1,0 +1,3 @@
+arquivo;titulo;autores;tipo;ano;curso;orientador;resumo;palavras_chave
+# Exemplo (descomente e ajuste para personalizar metadados de arquivos colocados nesta pasta):
+# meu-livro.pdf;Arquitetura de Sistemas Web;João Silva, Maria Oliveira;ARTIGO;2025;Ciência da Computação;Prof. Dr. Carlos Souza;Resumo opcional do documento.;arquitetura;web;spring

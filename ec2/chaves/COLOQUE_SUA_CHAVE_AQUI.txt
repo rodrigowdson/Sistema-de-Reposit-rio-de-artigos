@@ -1,0 +1,2 @@
+Coloque sua chave `.pem` da AWS EC2 nesta pasta (ex.: `labsuser.pem`).
+Todos os arquivos desta pasta (exceto este aviso) são ignorados pelo `.gitignore` e nunca serão enviados para o GitHub.

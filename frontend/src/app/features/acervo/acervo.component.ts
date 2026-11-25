@@ -261,7 +261,7 @@ export class AcervoComponent implements OnInit {
 
   ngOnInit(): void {
     this.cursoService.listar().subscribe({ next: (c) => this.cursos.set(c) });
-    this.orientadorService.listar(false).subscribe({ next: (o) => this.orientadores.set(o) });
+    this.orientadorService.listar(true).subscribe({ next: (o) => this.orientadores.set(o) });
     this.trabalhoService.listarAnos().subscribe({ next: (a) => this.anos.set(a) });
     this.pesquisar(0);
   }
@@ -313,6 +313,18 @@ export class AcervoComponent implements OnInit {
         link.download = trabalho.arquivoNomeOriginal || `trabalho-${trabalho.id}.pdf`;
         link.click();
         URL.revokeObjectURL(url);
+        this.pagina.update((atual) =>
+          atual
+            ? {
+                ...atual,
+                content: atual.content.map((item) =>
+                  item.id === trabalho.id
+                    ? { ...item, totalDownloads: item.totalDownloads + 1 }
+                    : item
+                ),
+              }
+            : atual
+        );
         this.baixandoId.set(null);
       },
       error: (err) => {

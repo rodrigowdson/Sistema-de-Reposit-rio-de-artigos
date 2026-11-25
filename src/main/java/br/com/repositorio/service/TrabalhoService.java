@@ -162,12 +162,28 @@ public class TrabalhoService {
     public TrabalhoResponse atualizar(Long id, TrabalhoRequest dados, Usuario usuario) {
         Trabalho t = obter(id);
         validarPermissaoEdicao(t, usuario);
+        if (!ehModerador(usuario) && t.getStatus() != StatusTrabalho.PENDENTE) {
+            throw new RegraNegocioException("Apenas trabalhos em homologação (pendentes) podem ser editados pelo autor.");
+        }
 
+        Curso novoCurso = buscarCurso(dados.cursoId());
         Orientador orientador = Objects.equals(t.getOrientador().getId(), dados.orientadorId())
                 ? t.getOrientador()
                 : buscarOrientador(dados.orientadorId());
 
-        preencher(t, dados, buscarCurso(dados.cursoId()), orientador);
+        boolean mudouPasta = !Objects.equals(t.getAno(), dados.ano())
+                || !Objects.equals(t.getCurso().getId(), novoCurso.getId());
+
+        preencher(t, dados, novoCurso, orientador);
+
+        if (mudouPasta && t.getArquivo() != null && StringUtils.hasText(t.getArquivo().getChaveStorage())) {
+            String chaveAntiga = t.getArquivo().getChaveStorage();
+            String novaChave = gerarChave(dados.ano(), novoCurso.getId());
+            storage.mover(chaveAntiga, novaChave);
+            reverterMovimentacaoEmRollback(chaveAntiga, novaChave);
+            t.getArquivo().setChaveStorage(novaChave);
+        }
+
         return TrabalhoResponse.from(trabalhoRepository.saveAndFlush(t));
     }
 
@@ -185,6 +201,9 @@ public class TrabalhoService {
     public void excluir(Long id, Usuario usuario) {
         Trabalho t = obter(id);
         validarPermissaoEdicao(t, usuario);
+        if (!ehModerador(usuario) && t.getStatus() != StatusTrabalho.PENDENTE) {
+            throw new RegraNegocioException("Apenas trabalhos em homologação (pendentes) podem ser excluídos pelo autor.");
+        }
         String chave = t.getArquivo().getChaveStorage();
         trabalhoRepository.delete(t);
         limparArquivoQuando(chave, true);
@@ -232,15 +251,22 @@ public class TrabalhoService {
 
     private void preencher(Trabalho t, TrabalhoRequest d, Curso curso, Orientador orientador) {
         t.setTitulo(d.titulo().trim());
-        t.setResumo(d.resumo());
-        t.setPalavrasChave(d.palavrasChave());
+        t.setResumo(StringUtils.hasText(d.resumo()) ? d.resumo().trim() : null);
+        t.setPalavrasChave(StringUtils.hasText(d.palavrasChave()) ? d.palavrasChave().trim() : null);
         t.setTipo(d.tipo());
         t.setAno(d.ano());
         t.setCurso(curso);
         t.setOrientador(orientador);
         t.getAutores().clear();
         if (d.autores() != null) {
-            d.autores().forEach(a -> t.getAutores().add(a.trim()));
+            d.autores().stream()
+                    .filter(Objects::nonNull)
+                    .map(String::trim)
+                    .filter(s -> !s.isEmpty())
+                    .forEach(a -> t.getAutores().add(a));
+        }
+        if (t.getAutores().isEmpty()) {
+            throw new RegraNegocioException("Informe pelo menos um autor.");
         }
     }
 
@@ -284,6 +310,16 @@ public class TrabalhoService {
     }
 
     private void limparArquivoQuando(String chave, boolean quandoCommit) {
+        if (!TransactionSynchronizationManager.isSynchronizationActive()) {
+            if (quandoCommit) {
+                try {
+                    storage.remover(chave);
+                } catch (RuntimeException e) {
+                    log.warn("Não foi possível remover o arquivo {} do storage", chave, e);
+                }
+            }
+            return;
+        }
         TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
             @Override
             public void afterCompletion(int status) {
@@ -293,6 +329,24 @@ public class TrabalhoService {
                         storage.remover(chave);
                     } catch (RuntimeException e) {
                         log.warn("Não foi possível remover o arquivo {} do storage", chave, e);
+                    }
+                }
+            }
+        });
+    }
+
+    private void reverterMovimentacaoEmRollback(String chaveOriginal, String chaveMovida) {
+        if (!TransactionSynchronizationManager.isSynchronizationActive()) {
+            return;
+        }
+        TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+            @Override
+            public void afterCompletion(int status) {
+                if (status != STATUS_COMMITTED) {
+                    try {
+                        storage.mover(chaveMovida, chaveOriginal);
+                    } catch (RuntimeException e) {
+                        log.warn("Não foi possível reverter a movimentação do arquivo {} para {}", chaveMovida, chaveOriginal, e);
                     }
                 }
             }

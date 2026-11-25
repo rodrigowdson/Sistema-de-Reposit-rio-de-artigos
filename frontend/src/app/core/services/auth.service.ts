@@ -27,7 +27,15 @@ export class AuthService {
   constructor() {
     if (this._token()) {
       this.http.get<Usuario>('/api/auth/me').subscribe({
-        next: (u) => this.salvarUsuario(u),
+        next: (u) => {
+          this.salvarUsuario(u);
+          const url = this.router.url;
+          if (url.startsWith('/admin/usuarios') || url.startsWith('/admin/backups')) {
+            if (!this.ehAdmin()) this.router.navigate(['/']);
+          } else if (url.startsWith('/admin') && !this.podeModerar()) {
+            this.router.navigate(['/']);
+          }
+        },
         error: () => this.limparSessao(),
       });
     }

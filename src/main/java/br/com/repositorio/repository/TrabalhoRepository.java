@@ -38,4 +38,14 @@ public interface TrabalhoRepository extends JpaRepository<Trabalho, Long>, JpaSp
 
     @Query("select distinct t.ano from Trabalho t where t.status = br.com.repositorio.model.enums.StatusTrabalho.PUBLICADO order by t.ano desc")
     List<Integer> listarAnosPublicados();
+
+    @Query("""
+            select distinct t from Trabalho t
+            left join fetch t.curso
+            left join fetch t.orientador
+            left join fetch t.enviadoPor
+            left join fetch t.autores
+            order by t.id asc
+            """)
+    List<Trabalho> findAllComRelacionamentos();
 }

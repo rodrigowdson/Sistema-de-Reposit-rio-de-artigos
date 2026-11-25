@@ -65,8 +65,50 @@ public class LocalStorageService implements StorageService {
         try {
             Path caminho = resolverSeguro(chave);
             Files.deleteIfExists(caminho);
+            limparPastasVazias(caminho.getParent());
         } catch (IOException e) {
             throw new ArmazenamentoException("Falha ao remover arquivo do storage local: " + chave, e);
+        }
+    }
+
+    @Override
+    public void mover(String chaveOrigem, String chaveDestino) {
+        Path origem = resolverSeguro(chaveOrigem);
+        Path destino = resolverSeguro(chaveDestino);
+        if (origem.equals(destino)) {
+            return;
+        }
+        if (!Files.exists(origem)) {
+            throw new ArmazenamentoException("Arquivo de origem não encontrado no storage local: " + chaveOrigem);
+        }
+        try {
+            Path pai = destino.getParent();
+            if (pai != null) {
+                Files.createDirectories(pai);
+            }
+            Files.move(origem, destino, StandardCopyOption.REPLACE_EXISTING);
+            limparPastasVazias(origem.getParent());
+        } catch (IOException e) {
+            throw new ArmazenamentoException("Falha ao mover arquivo no storage local.", e);
+        }
+    }
+
+    private void limparPastasVazias(Path diretorio) {
+        Path atual = diretorio;
+        while (atual != null && !atual.equals(baseDir) && atual.startsWith(baseDir)) {
+            try (var stream = Files.list(atual)) {
+                if (stream.findAny().isPresent()) {
+                    break;
+                }
+            } catch (IOException e) {
+                break;
+            }
+            try {
+                Files.deleteIfExists(atual);
+            } catch (IOException e) {
+                break;
+            }
+            atual = atual.getParent();
         }
     }
 

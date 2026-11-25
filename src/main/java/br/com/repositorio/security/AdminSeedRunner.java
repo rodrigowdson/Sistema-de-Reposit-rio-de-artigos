@@ -55,5 +55,8 @@ public class AdminSeedRunner implements ApplicationRunner {
 
         usuarioRepository.save(admin);
         log.info("Usuário ADMIN inicial criado: {}", admin.getEmail());
+        if ("admin123".equals(adminCfg.getSenha()) || "troque-esta-senha-admin".equals(adminCfg.getSenha())) {
+            log.warn("ATENÇÃO: O usuário ADMIN inicial foi criado com senha padrão. Defina APP_ADMIN_PASSWORD no ambiente da EC2.");
+        }
     }
 }

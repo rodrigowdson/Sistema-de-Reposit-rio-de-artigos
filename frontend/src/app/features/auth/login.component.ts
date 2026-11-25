@@ -65,7 +65,8 @@ export class LoginComponent {
     this.auth.login(email, senha).subscribe({
       next: () => {
         this.toast.sucesso('Login realizado com sucesso.');
-        const redirect = this.route.snapshot.queryParamMap.get('redirect') || '/';
+        const raw = this.route.snapshot.queryParamMap.get('redirect') || '/';
+        const redirect = raw.startsWith('/') && !raw.startsWith('//') ? raw : '/';
         this.router.navigateByUrl(redirect);
       },
       error: (err) => {

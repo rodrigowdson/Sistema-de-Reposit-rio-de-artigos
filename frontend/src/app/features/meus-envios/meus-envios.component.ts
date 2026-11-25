@@ -7,6 +7,7 @@ import {
   extrairMensagemErro,
   rotuloTipo,
 } from '../../core/models/repositorio.models';
+import { AuthService } from '../../core/services/auth.service';
 import { ToastService } from '../../core/services/toast.service';
 import { TrabalhoService } from '../../core/services/trabalho.service';
 import { PaginatorComponent } from '../../shared/components/paginator.component';
@@ -71,16 +72,18 @@ import { StatusBadgeComponent } from '../../shared/components/status-badge.compo
                     <a [routerLink]="['/trabalhos', item.id]" class="text-amber-900 font-semibold hover:underline">
                       Ver
                     </a>
-                    <a [routerLink]="['/trabalhos', item.id, 'editar']" class="text-stone-700 hover:underline">
-                      Editar
-                    </a>
-                    <button
-                      type="button"
-                      (click)="excluir(item)"
-                      class="text-rose-700 hover:underline"
-                    >
-                      Excluir
-                    </button>
+                    @if (podeAlterar(item)) {
+                      <a [routerLink]="['/trabalhos', item.id, 'editar']" class="text-stone-700 hover:underline">
+                        Editar
+                      </a>
+                      <button
+                        type="button"
+                        (click)="excluir(item)"
+                        class="text-rose-700 hover:underline"
+                      >
+                        Excluir
+                      </button>
+                    }
                   </td>
                 </tr>
               }
@@ -98,6 +101,7 @@ import { StatusBadgeComponent } from '../../shared/components/status-badge.compo
   `,
 })
 export class MeusEnviosComponent implements OnInit {
+  private readonly auth = inject(AuthService);
   private readonly trabalhoService = inject(TrabalhoService);
   private readonly toast = inject(ToastService);
 
@@ -106,6 +110,10 @@ export class MeusEnviosComponent implements OnInit {
 
   ngOnInit(): void {
     this.carregar(0);
+  }
+
+  podeAlterar(item: Trabalho): boolean {
+    return this.auth.podeModerar() || item.status === 'PENDENTE';
   }
 
   carregar(page: number): void {
@@ -129,7 +137,10 @@ export class MeusEnviosComponent implements OnInit {
     this.trabalhoService.excluir(item.id).subscribe({
       next: () => {
         this.toast.sucesso('Trabalho excluído com sucesso.');
-        this.carregar(this.pagina()?.number ?? 0);
+        const paginaAtual = this.pagina()?.number ?? 0;
+        const itensRestantes = (this.pagina()?.content.length ?? 1) - 1;
+        const proximaPagina = itensRestantes === 0 && paginaAtual > 0 ? paginaAtual - 1 : paginaAtual;
+        this.carregar(proximaPagina);
       },
       error: (err) => {
         this.toast.erro(extrairMensagemErro(err, 'Não foi possível excluir o trabalho.'));

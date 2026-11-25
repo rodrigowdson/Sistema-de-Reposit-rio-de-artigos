@@ -49,8 +49,8 @@ export class PaginatorComponent {
   paginasVisiveis(): number[] {
     const total = this.totalPages();
     const atual = this.page();
-    const inicio = Math.max(0, atual - 2);
-    const fim = Math.min(total - 1, inicio + 4);
+    const fim = Math.min(total - 1, Math.max(atual + 2, 4));
+    const inicio = Math.max(0, fim - 4);
     const resultado: number[] = [];
     for (let i = inicio; i <= fim; i++) {
       resultado.push(i);

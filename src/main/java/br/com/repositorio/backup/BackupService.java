@@ -6,6 +6,7 @@ import jakarta.annotation.PostConstruct;
 import jakarta.annotation.PreDestroy;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.scheduling.concurrent.ThreadPoolTaskScheduler;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
@@ -24,6 +25,7 @@ import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.Deque;
 import java.util.List;
+import java.util.Locale;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentLinkedDeque;
@@ -38,11 +40,14 @@ public class BackupService {
     private static final Logger log = LoggerFactory.getLogger(BackupService.class);
     private static final int LIMITE_HISTORICO = 50;
     private static final int LIMITE_SAIDA_CHARS = 2000;
-    private static final Pattern PADRAO_IDENTIFICADOR = Pattern.compile("^[a-zA-Z0-9._-]+$");
+    private static final Pattern PADRAO_USUARIO_SSH = Pattern.compile("^[a-zA-Z0-9_][a-zA-Z0-9._-]{0,63}$");
+    private static final Pattern PADRAO_HOST_SSH = Pattern.compile("^[a-zA-Z0-9][a-zA-Z0-9.-]{0,252}$");
     private static final Pattern PADRAO_DIRETORIO_REMOTO = Pattern.compile("^/[a-zA-Z0-9._/-]+$");
+    private static final Pattern CARACTERES_PROIBIDOS_CHAVE = Pattern.compile("[\"'\\r\\n;&|$`]");
 
     private final Path diretorioLocal;
     private final long timeoutSegundos;
+    private final CatalogoSnapshotService catalogoSnapshotService;
     private final ThreadPoolTaskScheduler scheduler;
     private final AtomicBoolean emExecucao = new AtomicBoolean(false);
     private final Deque<BackupExecucaoResponse> historico = new ConcurrentLinkedDeque<>();
@@ -57,9 +62,14 @@ public class BackupService {
     private ScheduledFuture<?> tarefaAgendada;
     private LocalDateTime proximoAgendamento;
 
-    public BackupService(BackupProperties backupProperties, StorageProperties storageProperties) {
+    public BackupService(
+            BackupProperties backupProperties,
+            StorageProperties storageProperties,
+            ObjectProvider<CatalogoSnapshotService> snapshotServiceProvider
+    ) {
         this.diretorioLocal = Paths.get(storageProperties.getLocalDir()).toAbsolutePath().normalize();
         this.timeoutSegundos = Math.max(30L, backupProperties.getTimeoutSegundos());
+        this.catalogoSnapshotService = snapshotServiceProvider != null ? snapshotServiceProvider.getIfAvailable() : null;
 
         this.habilitado = backupProperties.isHabilitado();
         this.intervaloMinutos = Math.max(1L, backupProperties.getIntervaloMinutos());
@@ -123,17 +133,19 @@ public class BackupService {
             long novoIntervalo = req.intervaloMinutos() != null ? req.intervaloMinutos() : intervaloMinutos;
             boolean novoHabilitado = req.habilitado() != null ? req.habilitado() : habilitado;
 
-            if (StringUtils.hasText(novoUser) && !PADRAO_IDENTIFICADOR.matcher(novoUser).matches()) {
+            if (StringUtils.hasText(novoUser) && !PADRAO_USUARIO_SSH.matcher(novoUser).matches()) {
                 throw new RegraNegocioException("Usuário SSH inválido.");
             }
-            if (StringUtils.hasText(novoHost) && !PADRAO_IDENTIFICADOR.matcher(novoHost).matches()) {
-                throw new RegraNegocioException("Host/IP da EC2 inválido.");
+            if (StringUtils.hasText(novoHost)
+                    && (!PADRAO_HOST_SSH.matcher(novoHost).matches() || "0.0.0.0".equals(novoHost))) {
+                throw new RegraNegocioException("Host/IP da EC2 inválido. Informe o IP público ou DNS real da instância.");
             }
             if (StringUtils.hasText(novoDir)
                     && (!PADRAO_DIRETORIO_REMOTO.matcher(novoDir).matches() || novoDir.contains(".."))) {
                 throw new RegraNegocioException("Diretório remoto da EC2 inválido. Use caminho absoluto como /home/admin/backup-repositorio.");
             }
-            if (StringUtils.hasText(novaKey) && (novaKey.contains("\"") || novaKey.contains("'") || novaKey.contains("\n"))) {
+            if (StringUtils.hasText(novaKey)
+                    && (novaKey.startsWith("-") || CARACTERES_PROIBIDOS_CHAVE.matcher(novaKey).find())) {
                 throw new RegraNegocioException("Caminho da chave SSH inválido.");
             }
 
@@ -203,6 +215,11 @@ public class BackupService {
             Path chavePath = validarConfiguracaoPronta(user, host, key, dir);
             Files.createDirectories(diretorioLocal);
 
+            Path arquivoSnapshot = diretorioLocal.resolve(CatalogoSnapshotService.NOME_ARQUIVO_SNAPSHOT);
+            if ("BACKUP".equals(tipo) && catalogoSnapshotService != null) {
+                catalogoSnapshotService.exportarPara(arquivoSnapshot);
+            }
+
             String remoto = user + "@" + host;
             String pastaRemotaArquivos = dir + "/arquivos";
             String chaveStr = chavePath.toString();
@@ -230,9 +247,18 @@ public class BackupService {
                         "Falha na sincronização com a EC2 (código " + syncRes.exitCode + ").", syncRes.saida);
             }
 
-            String msgOk = "BACKUP".equals(tipo)
-                    ? "Backup enviado para a EC2 com sucesso."
-                    : "Backup baixado da EC2 para o storage local com sucesso.";
+            String msgOk;
+            if ("BACKUP".equals(tipo)) {
+                msgOk = "Backup de PDFs e metadados enviado para a EC2 com sucesso.";
+            } else {
+                if (catalogoSnapshotService != null && Files.isRegularFile(arquivoSnapshot)) {
+                    CatalogoSnapshotService.ResultadoImportacao imp =
+                            catalogoSnapshotService.importarDe(arquivoSnapshot, diretorioLocal);
+                    msgOk = "Backup baixado da EC2 com sucesso. Metadados restaurados: " + imp.resumo() + ".";
+                } else {
+                    msgOk = "Arquivos PDF baixados da EC2 para o storage local com sucesso.";
+                }
+            }
 
             log.info("{} ({}) concluído em {} ms -> {}", tipo, origem, duracaoMs(inicioNs), destino);
             return registrar(tipo, origem, "SUCESSO", iniciadoEm, inicioNs, destino, msgOk, syncRes.saida);
@@ -249,10 +275,12 @@ public class BackupService {
     }
 
     private List<String> montarComandoSync(String tipo, String chaveStr, String remoto, String pastaRemotaArquivos) {
-        boolean temRsync = Files.isExecutable(Path.of("/usr/bin/rsync"))
-                || Files.isExecutable(Path.of("/bin/rsync"));
+        boolean ehWindows = System.getProperty("os.name", "").toLowerCase(Locale.ROOT).contains("win");
+        boolean temRsync = !ehWindows && (Files.isExecutable(Path.of("/usr/bin/rsync"))
+                || Files.isExecutable(Path.of("/bin/rsync")));
 
-        String localComBarra = diretorioLocal.toString() + "/";
+        String separador = ehWindows ? "\\" : "/";
+        String localComBarra = diretorioLocal.toString() + separador;
         String remotoComBarra = remoto + ":" + pastaRemotaArquivos + "/";
 
         if (temRsync) {
@@ -287,7 +315,7 @@ public class BackupService {
         cmd.add("-o");
         cmd.add("ConnectTimeout=15");
         if ("BACKUP".equals(tipo)) {
-            cmd.add(diretorioLocal.toString() + "/.");
+            cmd.add(diretorioLocal.resolve(".").toString());
             cmd.add(remotoComBarra);
         } else {
             cmd.add(remoto + ":" + pastaRemotaArquivos + "/.");
@@ -349,17 +377,17 @@ public class BackupService {
     }
 
     private Path validarConfiguracaoPronta(String user, String host, String key, String dir) {
-        if (!StringUtils.hasText(user) || !PADRAO_IDENTIFICADOR.matcher(user).matches()) {
-            throw new RegraNegocioException("Configure o usuário SSH da EC2 (BACKUP_EC2_USER).");
+        if (!StringUtils.hasText(user) || !PADRAO_USUARIO_SSH.matcher(user).matches()) {
+            throw new RegraNegocioException("Configure um usuário SSH válido da EC2 (BACKUP_EC2_USER).");
         }
-        if (!StringUtils.hasText(host) || !PADRAO_IDENTIFICADOR.matcher(host).matches()) {
-            throw new RegraNegocioException("Configure o IP/host da EC2 (BACKUP_EC2_HOST).");
+        if (!StringUtils.hasText(host) || !PADRAO_HOST_SSH.matcher(host).matches() || "0.0.0.0".equals(host)) {
+            throw new RegraNegocioException("Configure o IP público ou DNS real da EC2 (BACKUP_EC2_HOST).");
         }
         if (!StringUtils.hasText(dir) || !PADRAO_DIRETORIO_REMOTO.matcher(dir).matches() || dir.contains("..")) {
             throw new RegraNegocioException("Configure um diretório remoto válido na EC2 (BACKUP_EC2_DIR).");
         }
-        if (!StringUtils.hasText(key)) {
-            throw new RegraNegocioException("Configure o caminho da chave .pem da EC2 (BACKUP_EC2_KEY).");
+        if (!StringUtils.hasText(key) || key.startsWith("-") || CARACTERES_PROIBIDOS_CHAVE.matcher(key).find()) {
+            throw new RegraNegocioException("Configure um caminho válido para a chave .pem da EC2 (BACKUP_EC2_KEY).");
         }
         Path chavePath = resolverCaminhoChave(key);
         if (!Files.isRegularFile(chavePath)) {

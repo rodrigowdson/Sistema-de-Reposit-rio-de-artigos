@@ -12,4 +12,8 @@ public record OrientadorResponse(
     public static OrientadorResponse from(Orientador o) {
         return new OrientadorResponse(o.getId(), o.getNome(), o.getEmail(), o.getTitulacao(), o.isAtivo());
     }
+
+    public static OrientadorResponse fromPublico(Orientador o) {
+        return new OrientadorResponse(o.getId(), o.getNome(), null, o.getTitulacao(), o.isAtivo());
+    }
 }

@@ -4,16 +4,16 @@ services:
     container_name: repositorio-mysql
     restart: unless-stopped
     environment:
-      MYSQL_DATABASE: repositorio_tcc
-      MYSQL_USER: repositorio
-      MYSQL_PASSWORD: repositorio_dev
-      MYSQL_ROOT_PASSWORD: root_dev
+      MYSQL_DATABASE: ${DB_NAME:-repositorio_tcc}
+      MYSQL_USER: ${DB_USERNAME:-repositorio}
+      MYSQL_PASSWORD: ${DB_PASSWORD:-repositorio_dev}
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-root_dev}
     ports:
       - "3306:3306"
     volumes:
       - mysql_data:/var/lib/mysql
     healthcheck:
-      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-uroot", "-proot_dev"]
+      test: ["CMD-SHELL", "mysqladmin ping -h localhost -uroot -p\"$${MYSQL_ROOT_PASSWORD}\""]
       interval: 10s
       timeout: 5s
       retries: 5
