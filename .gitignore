@@ -17,10 +17,8 @@ ec2/chaves/*
 aws-backup/backup.env
 aws-backup/restaurado/
 
-# Storage local e PDFs da fila de envio
+# Storage local (arquivos gravados em tempo de execução)
 /storage/
-/livros/*.pdf
-/livros/**/*.pdf
 
 # IDEs
 .idea/
