@@ -1,0 +1,49 @@
+%PDF-1.4
+1 0 obj
+<< /Type /Catalog /Pages 2 0 R >>
+endobj
+2 0 obj
+<< /Type /Pages /Kids [3 0 R] /Count 1 >>
+endobj
+3 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Contents 4 0 R /Resources << /Font << /F1 5 0 R >> >> >>
+endobj
+4 0 obj
+<< /Length 647 >>
+stream
+BT
+/F1 12 Tf
+50 760 Td
+16 TL
+(ARTIGO ACADEMICO \(2023\)) Tj
+T* () Tj
+T* (Titulo: Analise Comparativa de Indexacao Full-Text e B-Tree em Repositorios) Tj
+T* (Academicos MySQL) Tj
+T* (Autores: Bruno Henrique Oliveira) Tj
+T* (Curso: Ciencia da Computacao) Tj
+T* (Orientador: Livia Almada Cruz) Tj
+T* (Palavras-chave: MySQL, Indexacao, Full-Text Search, Banco de Dados, Artigo) Tj
+T* () Tj
+T* (Resumo:) Tj
+T* (Avalia-se o desempenho de consultas textuais em grandes volumes de metadados) Tj
+T* (academicos no MySQL 8, comparando estrategias com LIKE, indices B-Tree e indices) Tj
+T* (FULLTEXT em termos de plano de execucao e tempo de resposta.) Tj
+ET
+endstream
+endobj
+5 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>
+endobj
+xref
+0 6
+0000000000 65535 f 
+0000000009 00000 n 
+0000000058 00000 n 
+0000000115 00000 n 
+0000000241 00000 n 
+0000000939 00000 n 
+trailer
+<< /Size 6 /Root 1 0 R >>
+startxref
+1009
+%%EOF

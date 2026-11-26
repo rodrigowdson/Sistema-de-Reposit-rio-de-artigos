@@ -1,0 +1,49 @@
+%PDF-1.4
+1 0 obj
+<< /Type /Catalog /Pages 2 0 R >>
+endobj
+2 0 obj
+<< /Type /Pages /Kids [3 0 R] /Count 1 >>
+endobj
+3 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Contents 4 0 R /Resources << /Font << /F1 5 0 R >> >> >>
+endobj
+4 0 obj
+<< /Length 661 >>
+stream
+BT
+/F1 12 Tf
+50 760 Td
+16 TL
+(ARTIGO ACADEMICO \(2024\)) Tj
+T* () Tj
+T* (Titulo: Conformidade com a LGPD no Armazenamento e Auditoria de Prontuarios) Tj
+T* (Eletronicos) Tj
+T* (Autores: Camila Duarte Teixeira; Joao Pedro Almeida) Tj
+T* (Curso: Sistemas de Informacao) Tj
+T* (Orientador: Claro Henrique Silva Sales) Tj
+T* (Palavras-chave: LGPD, Prontuario Eletronico, Seguranca da Informacao, Auditoria, Artigo) Tj
+T* () Tj
+T* (Resumo:) Tj
+T* (Este estudo investiga controles de acesso baseados em papeis, trilhas de auditoria) Tj
+T* (imutaveis e criptografia em repouso para garantir sigilo e rastreabilidade em) Tj
+T* (sistemas de saude conforme a LGPD.) Tj
+ET
+endstream
+endobj
+5 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>
+endobj
+xref
+0 6
+0000000000 65535 f 
+0000000009 00000 n 
+0000000058 00000 n 
+0000000115 00000 n 
+0000000241 00000 n 
+0000000953 00000 n 
+trailer
+<< /Size 6 /Root 1 0 R >>
+startxref
+1023
+%%EOF
